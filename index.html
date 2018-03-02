@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Title</title>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <!--<script src="https://d3js.org/d3.v3.min.js"></script>-->
+    <!--<script src="https://d3js.org/d3-queue.v3.min.js"></script>-->
+    <!--<script src="https://d3js.org/d3-axis.v1.min.js"></script>-->
+
+
+    <style>
+        textarea{
+            width: 100%;
+            height: 20em;
+            font-family: monospace;
+        }
+
+        #intervals{
+            margin: 1em;
+            padding: 1em;
+            height:2em;
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Least-squares fit of Hill equation</h1>
+    <p>
+        Paste a set of concentration vs saturation data points (separated by space or tab) and see the fit below
+    </p>
+    <textarea>
+0.0000929 92.14734416605359
+0.0000155 97.05991086761192
+0.00000258 98.5355562414914
+4.3e-7 73.4012272963174
+7.17e-8 41.570778854406925
+1.19e-8 4.269630186951613
+1.99e-9 2.3823832448827233
+3.32e-10 21.11977788084777
+5.53e-11 -3.7407122187842425
+9.22e-12 7.807927421205066
+  </textarea>
+
+    <div id="plotContainer"></div>
+
+    <script>
+
+        /**
+         * Evaluates the Hill function A+(B-A)/(1+(C/x)**D
+         * @see https://idbssupport.com/sw/selfservice/content/Products/Help/XLFIT/5.5/Model_Categories/Model_205.htm
+         * @param p Function parameters [A,B,C,D]
+         * @param x
+         * @returns {*}
+         */
+        function make_hill_fn(p) {
+            return (function(x){ return p[0] + (p[1] - p[0]) / (1 + Math.pow(p[2] / x, p[3])); });
+        }
+
+
+        const plotDiv = d3.select("#plotContainer");
+        const textarea = d3.select("textarea");
+//        const colorScale = d3.scale.category20();
+//        const plotPadding = 20;
+        // set the dimensions and margins of the graph
+        let cWidth = 720,
+            cHeight = 500;
+        let margin = {top: 20, right: 40, bottom: 50, left: 50},
+            width = cWidth - margin.left - margin.right,
+            height = cHeight - margin.top - margin.bottom,
+            svg = plotDiv.append("svg")
+                .attr("width", cWidth)
+                .attr("height", cHeight);
+
+        const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        const x = d3.scaleLog().range([0, width]).domain([1e-12, 1e-6]);
+        const y = d3.scaleLinear().range([height, 0]).domain([0,100]);
+
+        const iniHill = make_hill_fn([0, 100, 1, 0.1])
+        const iniHillPath = g.append("path").attr("class", "iniHillPath");
+
+        const yAxis = g.append("g")
+            .attr("class", "axis")
+            .call(d3.axisLeft(y).ticks(10));
+
+        const xAxis = g.append("g")
+            .attr("class", "axis")
+            .attr("transform", "translate(0,"+height+")")
+            .call(d3.axisBottom(x).ticks(10));
+
+        function updateIntervals(){
+            cWidth = plotDiv.node().clientWidth;
+            width = cWidth - margin.left - margin.right;
+            svg.attr("width", cWidth);
+
+            let doseData = textarea.node().value.split("\n")
+                .filter( (l)=>l.match(/\d+\s\d+/))
+                .map(l => l.split(/\s/).map(t=>+t));
+
+            const xdomain = d3.extent(doseData, function(d){ return d[0]; });
+            x.domain(xdomain);
+            y.domain([0, d3.max(doseData, function(d){ return d[1]; })]);
+
+            x.range([0,width])
+            xAxis.call(d3.axisBottom(x).ticks(10));
+            yAxis.call(d3.axisLeft(y).ticks(10));
+
+            let dosePointSel = g.selectAll(".dosePoint")
+                .data(doseData);
+
+            console.log(doseData[0]);
+            console.log(x(doseData[0][0]));
+            console.log(y(doseData[0][1]));
+
+            dosePointSel.enter().append("circle")
+                .attr("class", "dosePoint")
+                .attr("r", 4)
+                .attr("fill", "#b768ff")
+                .attr("stroke", "#261b38")
+                .attr("stroke-width", 1)
+                .attr("cx", function(d){ return x(d[0]); })
+                .attr("cy", function(d){ return y(d[1]); });
+
+            dosePointSel
+                .attr("cx", function(d){ return x(d[0]); })
+                .attr("cy", function(d){ return y(d[1]); });
+
+            dosePointSel.exit().remove();
+
+            const iniHillLine = d3.line()
+                .x(function(d){ console.log("x: "+d+" .. "+x(d)); return x(d); })
+                .y(function(d){ return iniHill(y(x.invert(d))); })
+            iniHillPath.data(d3.range(0,width,10))
+                .style("stroke", "steelblue")
+                .style("stroke-width", 2)
+                .attr("d", iniHillLine);
+
+//            let horizScale = d3.scale.linear()
+//                .domain([minTime, maxTime])
+//                .range([0,intervalDiv.style("width")]);
+//
+//            let divSel = intervalDiv.selectAll("div")
+//                .data(intervalData);
+//
+//            divSel.enter()
+//                .append("div")
+//                .style("position", "absolute")
+//                .style("height", "100%")
+//                .style("top", "0px")
+//                .style("left", function(d){ return horizScale(d[0]); })
+//                .style("width", function(d){
+//                    var w = parseFloat(horizScale(d[1])) - parseFloat(horizScale(d[0]));
+//                    return w+"px";
+//                })
+//                .style("background-color", function(d){ return colorScale(d[2]); });
+//
+//            divSel
+//                .transition()
+//                .style("left", function(d){ return horizScale(d[0]); })
+//                .style("width", function(d){
+//                    var w = parseFloat(horizScale(d[1])) - parseFloat(horizScale(d[0]));
+//                    return w+"px";
+//                })
+//                .style("background-color", function(d){ return colorScale(d[2]); });
+//
+//            divSel.exit()
+//                .transition()
+//                .style("opacity", "0")
+//                .remove();
+
+        }
+        updateIntervals();
+
+//        textarea.on("change", updateIntervals);
+//        textarea.on("keyup", updateIntervals);
+        window.addEventListener("resize", updateIntervals);
+
+    </script>
+</div>
+</body>
+</html>
