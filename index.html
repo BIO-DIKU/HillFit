@@ -81,7 +81,7 @@
         const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
         const x = d3.scaleLog().range([0, width]).domain([1e-12, 1e-6]);
-        const y = d3.scaleLinear().range([height, 0]).domain([0,100]);
+        const y = d3.scaleLinear().range([height, 0]).domain([-5,100]);
 
         const iniHill = make_hill_fn([0, 100, 1, 0.1])
         const iniHillPath = g.append("path").attr("class", "iniHillPath");
@@ -101,12 +101,12 @@
             svg.attr("width", cWidth);
 
             let doseData = textarea.node().value.split("\n")
-                .filter( (l)=>l.match(/\d+\s\d+/))
+                .filter( (l)=>l.match(/-?\d+\s-?\d+/))
                 .map(l => l.split(/\s/).map(t=>+t));
 
             const xdomain = d3.extent(doseData, function(d){ return d[0]; });
             x.domain(xdomain);
-            y.domain([0, d3.max(doseData, function(d){ return d[1]; })]);
+            y.domain(d3.extent(doseData, function(d){ return d[1]; }));
 
             x.range([0,width])
             xAxis.call(d3.axisBottom(x).ticks(10));
@@ -178,8 +178,8 @@
         }
         updateIntervals();
 
-//        textarea.on("change", updateIntervals);
-//        textarea.on("keyup", updateIntervals);
+        textarea.on("change", updateIntervals);
+        textarea.on("keyup", updateIntervals);
         window.addEventListener("resize", updateIntervals);
 
     </script>
